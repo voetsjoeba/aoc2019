@@ -12,3 +12,6 @@ pub fn file_read_i64s(filename: &str) -> Vec<i64> {
                              .map(|s| s.parse().unwrap())
                              .collect()
 }
+pub fn manhattan_distance(p1: (i32,i32), p2: (i32,i32)) -> u32 {
+    return ((p2.0 - p1.0).abs() + (p2.1 - p1.1).abs()) as u32;
+}
