@@ -1,5 +1,6 @@
 // vim: set ai et ts=4 sts=4 sw=4:
-use std::collections::VecDeque;
+use std::ops::{Index, IndexMut};
+use std::collections::{VecDeque, HashMap};
 use std::fmt;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -12,6 +13,7 @@ pub enum Op {
     JumpIfFalse,
     LessThan,
     Equals,
+    ShiftRelativeBase,
     Halt,
 }
 impl fmt::Display for Op {
@@ -26,14 +28,17 @@ impl fmt::Display for Op {
             Op::LessThan => "LessThan",
             Op::Equals => "Equals",
             Op::Halt => "Halt",
+            Op::ShiftRelativeBase => "ShiftRelativeBase",
         })
     }
 }
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ParamMode {
     Address,
     Immediate,
+    RelativeAddress,
 }
+
 pub struct Instruction {
     value: i64,
 }
@@ -56,6 +61,7 @@ impl Instruction {
             6  => Op::JumpIfFalse,
             7  => Op::LessThan,
             8  => Op::Equals,
+            9  => Op::ShiftRelativeBase,
             99 => Op::Halt,
             _  => panic!("invalid opcode: {}", self.value % 100),
         }
@@ -65,6 +71,7 @@ impl Instruction {
         match val {
             0 => ParamMode::Address,
             1 => ParamMode::Immediate,
+            2 => ParamMode::RelativeAddress,
             _ => panic!("unrecognized parameter mode: {}", val),
         }
     }
@@ -80,28 +87,67 @@ impl fmt::Display for CpuState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
             CpuState::Running => "Running",
-            CpuState::Halted => "Halted",
-            CpuState::WaitIO => "WaitIO",
+            CpuState::Halted  => "Halted",
+            CpuState::WaitIO  => "WaitIO",
         })
     }
 }
+
+pub struct Memory {
+    initial_data: Vec<i64>,
+    extra: HashMap<usize, i64>,
+}
+impl Memory {
+    pub fn new(initial_data: Vec<i64>) -> Self {
+        Self {
+            initial_data,
+            extra: HashMap::new(),
+        }
+    }
+}
+impl Index<usize> for Memory {
+    type Output = i64;
+    fn index(&self, addr: usize) -> &Self::Output {
+        if addr < self.initial_data.len() {
+            return &self.initial_data[addr];
+        }
+        match self.extra.get(&addr) {
+            Some(x) => x,
+            None    => &0,
+        }
+    }
+}
+impl IndexMut<usize> for Memory {
+    fn index_mut(&mut self, addr: usize) -> &mut Self::Output {
+        if addr < self.initial_data.len() {
+            return &mut self.initial_data[addr];
+        }
+        if !self.extra.contains_key(&addr) {
+            self.extra.insert(addr, 0);
+        }
+        self.extra.get_mut(&addr).unwrap()
+    }
+}
+
 pub struct CPU
 {
     pc: usize,
-    mem: Vec<i64>,
+    mem: Memory,
     input_queue: VecDeque<i64>,
     output_queue: VecDeque<i64>,
     state: CpuState,
+    relative_base: i64,
 }
 impl CPU
 {
     pub fn new(program: &Vec<i64>) -> Self {
         Self {
             pc: 0usize,
-            mem: program.clone(),
+            mem: Memory::new(program.clone()),
             input_queue: VecDeque::new(),
             output_queue: VecDeque::new(),
             state: CpuState::Halted,
+            relative_base: 0,
         }
     }
     pub fn run(&mut self) -> &mut Self {
@@ -186,6 +232,11 @@ impl CPU
                             self.pc += 4;
                           },
 
+            Op::ShiftRelativeBase => { let arg1 = self.read_param(0, instr);
+                                       self.relative_base += arg1;
+                                       self.pc += 2;
+                                     },
+
             Op::Halt => { self.state = CpuState::Halted; },
         }
     }
@@ -193,16 +244,18 @@ impl CPU
         let param_value = self.mem[self.pc + 1 + num];
         let param_mode = instr.param_mode(num as u32);
         match param_mode {
-            ParamMode::Address   => self.mem[param_value as usize],
-            ParamMode::Immediate => param_value,
+            ParamMode::Immediate       => param_value,
+            ParamMode::Address         => self.mem[param_value as usize],
+            ParamMode::RelativeAddress => self.mem[(self.relative_base + param_value) as usize]
         }
     }
     fn write_param(&mut self, num: usize, instr: &Instruction, value: i64) {
         let param_value = self.mem[self.pc + 1 + num];
         let param_mode = instr.param_mode(num as u32);
         match param_mode {
-            ParamMode::Address   => { self.mem[param_value as usize] = value; },
-            ParamMode::Immediate => { panic!("invalid parameter mode for output value"); }
+            ParamMode::Immediate       => { panic!("invalid parameter mode for output value"); }
+            ParamMode::Address         => { self.mem[param_value as usize] = value; },
+            ParamMode::RelativeAddress => { self.mem[(self.relative_base + param_value) as usize] = value; },
         }
     }
     pub fn send_input(&mut self, input: i64) -> &mut Self{
@@ -214,12 +267,14 @@ impl CPU
         self.output_queue.pop_front()
     }
     pub fn consume_output_last(&mut self) -> Option<i64> {
-        // consumes the output and returns the last value
-        let mut result: Option<i64> = None;
+        self.consume_output_all().into_iter().last()
+    }
+    pub fn consume_output_all(&mut self) -> Vec<i64> {
+        let mut result = Vec::new();
         while let Some(x) = self.output_queue.pop_front() {
-            result = Some(x);
+            result.push(x);
         }
-        return result;
+        result
     }
 }
 
@@ -253,6 +308,6 @@ mod tests {
         // and let it run to completion, and check that it produced the same input value as output
         cpu.run();
         assert_eq!(cpu.get_state(), CpuState::Halted);
-        assert_eq!(cpu.consume_output_last(), Some(17));
+        assert_eq!(cpu.consume_output_all(), vec![17]);
     }
 }
