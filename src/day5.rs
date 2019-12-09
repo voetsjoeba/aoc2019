@@ -4,25 +4,21 @@ use crate::intcode::CPU;
 
 pub fn main() {
     let line: &String = &util::file_read_lines("input/day5.txt")[0];
-    let data: Vec<i64> = line.split(",").map(|s| s.parse().unwrap()).collect();
-    part1(&data);
-    part2(&data);
+    let program: Vec<i64> = line.split(",").map(|s| s.parse().unwrap()).collect();
+    part1(&program);
+    part2(&program);
 }
 
-fn part1(data: &Vec<i64>) {
-    let mut cpu = CPU::new(
-        data,
-        || 1,                            // input function
-        |x| println!("output: {}", x)    // output function
-    );
+fn part1(program: &Vec<i64>) {
+    let mut cpu = CPU::new(program);
+    cpu.send_input(1);
     cpu.run();
+    println!("{}", cpu.consume_output_last().unwrap());
 }
-fn part2(data: &Vec<i64>) {
-    let mut cpu = CPU::new(
-        data,
-        || 5,                            // input function
-        |x| println!("output: {}", x)    // output function
-    );
+fn part2(program: &Vec<i64>) {
+    let mut cpu = CPU::new(program);
+    cpu.send_input(5);
     cpu.run();
+    println!("{}", cpu.consume_output_last().unwrap());
 }
 
