@@ -258,6 +258,11 @@ impl CPU
             ParamMode::RelativeAddress => { self.mem[(self.relative_base + param_value) as usize] = value; },
         }
     }
+    pub fn write_mem(&mut self, addr: i64, value: i64) -> &mut Self {
+        // for external access to writing memory
+        self.mem[addr as usize] = value;
+        self
+    }
     pub fn send_input(&mut self, input: i64) -> &mut Self{
         self.input_queue.push_back(input);
         return self;
