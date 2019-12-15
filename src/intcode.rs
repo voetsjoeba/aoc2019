@@ -1,9 +1,10 @@
 // vim: set ai et ts=4 sts=4 sw=4:
 use std::ops::{Index, IndexMut};
 use std::collections::{VecDeque, HashMap};
+use std::convert::TryFrom;
 use std::fmt;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash,  Debug)]
 pub enum Op {
     Add,
     Mul,
@@ -19,16 +20,16 @@ pub enum Op {
 impl fmt::Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
-            Op::Add => "Add",
-            Op::Mul => "Mul",
-            Op::Input => "Input",
-            Op::Output => "Output",
-            Op::JumpIfTrue => "JumpIfTrue",
-            Op::JumpIfFalse => "JumpIfFalse",
-            Op::LessThan => "LessThan",
-            Op::Equals => "Equals",
-            Op::Halt => "Halt",
-            Op::ShiftRelativeBase => "ShiftRelativeBase",
+            Op::Add               => "ADD",
+            Op::Mul               => "MUL",
+            Op::Input             => "IN",
+            Op::Output            => "OUT",
+            Op::JumpIfTrue        => "JT",
+            Op::JumpIfFalse       => "JF",
+            Op::LessThan          => "LT",
+            Op::Equals            => "EQ",
+            Op::Halt              => "HLT",
+            Op::ShiftRelativeBase => "SRB",
         })
     }
 }
@@ -38,42 +39,63 @@ pub enum ParamMode {
     Immediate,
     RelativeAddress,
 }
+impl TryFrom<i64> for ParamMode {
+    type Error = String;
+    fn try_from(val: i64) -> Result<Self, Self::Error>{
+        match val {
+            0 => Ok(ParamMode::Address),
+            1 => Ok(ParamMode::Immediate),
+            2 => Ok(ParamMode::RelativeAddress),
+            _ => Err(format!("invalid parameter mode: {}", val))
+        }
+    }
+}
 
 pub struct Instruction {
-    value: i64,
+    opcode: Op,
+    num_params: usize,
+    param_modes: Vec<ParamMode>,
 }
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.opcode())
+        write!(f, "{}", self.opcode)
     }
 }
+impl TryFrom<i64> for Instruction {
+    type Error = String;
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        match value % 100 {
+            1  => Self::try_make(Op::Add, 3, value),
+            2  => Self::try_make(Op::Mul, 3, value),
+            3  => Self::try_make(Op::Input, 1, value),
+            4  => Self::try_make(Op::Output, 1, value),
+            5  => Self::try_make(Op::JumpIfTrue, 2, value),
+            6  => Self::try_make(Op::JumpIfFalse, 2, value),
+            7  => Self::try_make(Op::LessThan, 3, value),
+            8  => Self::try_make(Op::Equals, 3, value),
+            9  => Self::try_make(Op::ShiftRelativeBase, 1, value),
+            99 => Self::try_make(Op::Halt, 0, value),
+            _    => Err(format!("unrecognized op code: {}", value % 100))
+        }
+    }
+}
+#[allow(dead_code)]
 impl Instruction {
-    pub fn new(value: i64) -> Self {
-        Self { value }
-    }
-    pub fn opcode(&self) -> Op {
-        match self.value % 100 {
-            1  => Op::Add,
-            2  => Op::Mul,
-            3  => Op::Input,
-            4  => Op::Output,
-            5  => Op::JumpIfTrue,
-            6  => Op::JumpIfFalse,
-            7  => Op::LessThan,
-            8  => Op::Equals,
-            9  => Op::ShiftRelativeBase,
-            99 => Op::Halt,
-            _  => panic!("invalid opcode: {}", self.value % 100),
+    pub fn try_make(opcode: Op, num_params: usize, param_modes_value: i64)
+        -> Result<Self, <Self as TryFrom<i64>>::Error>
+    {
+        let mut param_modes = Vec::<ParamMode>::new();
+        for i in 0..num_params {
+            let val = (param_modes_value / 10i64.pow(2+i as u32)) % 10;
+            param_modes.push(ParamMode::try_from(val)?);
         }
+        Ok(Self { opcode, num_params, param_modes })
     }
-    pub fn param_mode(&self, num: u32) -> ParamMode {
-        let val = (self.value / 10i64.pow(2+num)) % 10;
-        match val {
-            0 => ParamMode::Address,
-            1 => ParamMode::Immediate,
-            2 => ParamMode::RelativeAddress,
-            _ => panic!("unrecognized parameter mode: {}", val),
-        }
+    pub fn param_mode(&self, num: usize) -> ParamMode {
+        self.param_modes[num]
+    }
+    pub fn size(&self) -> usize { // size in "bytes"/"words"
+        self.num_params + 1
     }
 }
 
@@ -166,7 +188,7 @@ impl CPU
         self.state
     }
     pub fn step(&mut self) -> &mut Self {
-        let instr = Instruction::new(self.mem[self.pc]);
+        let instr = Instruction::try_from(self.mem[self.pc]).unwrap();
         self.execute(&instr);
         return self;
     }
@@ -175,8 +197,7 @@ impl CPU
         if self.state == CpuState::Halted {
             panic!("cannot execute instruction; CPU has halted");
         }
-        let op = instr.opcode();
-        match op {
+        match instr.opcode {
             Op::Add => { let arg1 = self.read_param(0, instr);
                          let arg2 = self.read_param(1, instr);
                          self.write_param(2, instr, arg1+arg2);
@@ -242,7 +263,7 @@ impl CPU
     }
     fn read_param(&self, num: usize, instr: &Instruction) -> i64 {
         let param_value = self.mem[self.pc + 1 + num];
-        let param_mode = instr.param_mode(num as u32);
+        let param_mode = instr.param_mode(num);
         match param_mode {
             ParamMode::Immediate       => param_value,
             ParamMode::Address         => self.mem[param_value as usize],
@@ -251,7 +272,7 @@ impl CPU
     }
     fn write_param(&mut self, num: usize, instr: &Instruction, value: i64) {
         let param_value = self.mem[self.pc + 1 + num];
-        let param_mode = instr.param_mode(num as u32);
+        let param_mode = instr.param_mode(num);
         match param_mode {
             ParamMode::Immediate       => { panic!("invalid parameter mode for output value"); }
             ParamMode::Address         => { self.mem[param_value as usize] = value; },
@@ -280,6 +301,56 @@ impl CPU
             result.push(x);
         }
         result
+    }
+}
+
+pub struct Disas {
+}
+#[allow(dead_code)]
+impl Disas {
+    pub fn disassemble(program: &Vec<i64>) -> String {
+        let mut result = String::new();
+
+        let mut pc: usize = 0;
+        while pc < program.len() {
+            result += &format!("{:06X}  ", pc);
+            if let Ok(instr) = Instruction::try_from(program[pc]) {
+                result += &Self::disassemble_instr(program, pc, &instr);
+                result += "\n";
+                pc += instr.size();
+            } else {
+                // not a valid instruction, treat it as data
+                result += &format!("{:-6} {:02X}\n", "", program[pc]);
+                pc += 1;
+            }
+        }
+
+        return result;
+    }
+    pub fn disassemble_instr(program: &Vec<i64>, pc: usize, instr: &Instruction) -> String {
+        let mut result = format!("{:-6}", instr.to_string());
+        if instr.num_params > 0 {
+            result += " ";
+            for n in 0..instr.num_params {
+                let param_value = program[pc + 1 + n];
+                result.push_str(&match instr.param_mode(n) {
+                    ParamMode::Immediate       => Self::format_immediate(param_value),
+                    ParamMode::Address         => format!("[{:02X}]", param_value),
+                    ParamMode::RelativeAddress => format!("[base + {:02X}]", param_value),
+                });
+                if n < instr.num_params - 1 {
+                    result += ", ";
+                }
+            }
+        }
+        return result;
+    }
+    fn format_immediate(val: i64) -> String {
+        if val < 0 {
+            format!("$-{:02X}", -val)
+        } else {
+            format!("${:02X}", val)
+        }
     }
 }
 
