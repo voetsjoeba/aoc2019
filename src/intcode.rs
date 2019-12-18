@@ -288,6 +288,13 @@ impl CPU
         self.input_queue.push_back(input);
         return self;
     }
+    #[allow(dead_code)]
+    pub fn send_input_iter(&mut self, iter: impl Iterator<Item=i64>) {
+        self.input_queue.extend(iter);
+    }
+    pub fn send_input_string(&mut self, s: &str) {
+        self.input_queue.extend(s.chars().map(|c| c as i64));
+    }
     pub fn consume_output(&mut self) -> Option<i64> {
         // pops a single value from the output queue, if any
         self.output_queue.pop_front()
