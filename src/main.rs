@@ -2,6 +2,9 @@ use clap::{App, Arg};
 
 mod util;
 mod intcode;
+mod path;
+mod tree;
+mod dprint;
 
 mod day1;
 mod day2;
@@ -20,6 +23,7 @@ mod day14;
 mod day15;
 mod day16;
 mod day17;
+mod day18;
 
 fn main() {
     let args = App::new("Advent of Code 2019")
@@ -53,6 +57,7 @@ fn main() {
         15 => day15::main(),
         16 => day16::main(),
         17 => day17::main(),
+        18 => day18::main(),
         _  => panic!("invalid day number: {}", day),
     };
 }
