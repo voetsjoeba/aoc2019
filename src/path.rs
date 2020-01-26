@@ -108,6 +108,32 @@ pub fn dijkstra<M,N,W>(map: &M,
           M: Map<Node=N>,
           W: Fn(&M, &N) -> bool, // is a given node on the map walkable?
 {
+    dijkstra_impl(map, source, None, is_walkable)
+}
+
+pub fn dijkstra_to_target<M,N,W>(map: &M,
+                                source: &N,
+                                target: &N,
+                                is_walkable: W) -> Option<Path<N,M>>
+    where N: Node,
+          M: Map<Node=N>,
+          W: Fn(&M, &N) -> bool, // is a given node on the map walkable?
+{
+    let (dists, came_from) = dijkstra_impl(map, source, Some(target), is_walkable);
+    assert!(dists.contains_key(target));
+    Some(Path {
+        nodes: Path::<N,M>::reconstruct_from(target, &came_from),
+        cost: dists[target],
+    })
+}
+fn dijkstra_impl<M,N,W>(map: &M,
+                        source: &N,
+                        target: Option<&N>,
+                        is_walkable: W) -> (HashMap<N, M::Cost>, HashMap<N,N>)
+    where N: Node,
+          M: Map<Node=N>,
+          W: Fn(&M, &N) -> bool, // is a given node on the map walkable?
+{
     let mut dist      = HashMap::<N, M::Cost>::new();
     let mut came_from = HashMap::<N, N>::new();
 
@@ -118,6 +144,12 @@ pub fn dijkstra<M,N,W>(map: &M,
     while !queue.is_empty() {
         let min_idx = (0..queue.len()).min_by_key(|&idx| dist[&queue[idx]]).unwrap();
         let node = queue.remove(min_idx).unwrap();
+
+        if let Some(t) = target {
+            if node == *t {
+                return (dist, came_from);
+            }
+        }
 
         for (nb, step_cost) in map.neighbours(&node) {
             if !is_walkable(map, &nb) {
