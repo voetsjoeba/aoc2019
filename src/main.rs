@@ -28,6 +28,7 @@ mod day19;
 mod day20;
 mod day21;
 mod day22;
+mod day23;
 
 fn main() {
     let args = App::new("Advent of Code 2019")
@@ -66,6 +67,7 @@ fn main() {
         20 => day20::main(),
         21 => day21::main(),
         22 => day22::main(),
+        23 => day23::main(),
         _  => panic!("invalid day number: {}", day),
     };
 }

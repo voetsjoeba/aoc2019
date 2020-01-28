@@ -160,6 +160,7 @@ pub struct CPU
     state: CpuState,
     relative_base: i64,
 }
+#[allow(dead_code)]
 impl CPU
 {
     pub fn new(program: &Vec<i64>) -> Self {
@@ -183,7 +184,6 @@ impl CPU
     pub fn is_halted(&self) -> bool {
         self.state == CpuState::Halted
     }
-    #[allow(dead_code)]
     pub fn get_state(&self) -> CpuState {
         self.state
     }
@@ -288,12 +288,26 @@ impl CPU
         self.input_queue.push_back(input);
         return self;
     }
-    #[allow(dead_code)]
     pub fn send_input_iter(&mut self, iter: impl Iterator<Item=i64>) {
         self.input_queue.extend(iter);
     }
     pub fn send_input_string(&mut self, s: &str) {
         self.input_queue.extend(s.chars().map(|c| c as i64));
+    }
+    pub fn peek_input_first(&self) -> Option<i64> {
+        self.input_queue.front().cloned()
+    }
+    pub fn peek_output_last(&self) -> Option<i64> {
+        // returns the last value from the output queue (if any) without removing it
+        self.output_queue.back().cloned()
+    }
+    pub fn consume_output_n(&mut self, n: usize) -> Option<Vec<i64>> {
+        // remove and return the first N output values from the queue, if there at least that many.
+        // otherwise, returns None.
+        if self.output_queue.len() >= n {
+            return Some(self.output_queue.drain(..n).collect());
+        }
+        return None;
     }
     pub fn consume_output(&mut self) -> Option<i64> {
         // pops a single value from the output queue, if any
