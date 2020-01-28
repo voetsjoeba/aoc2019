@@ -1,9 +1,11 @@
 // vim: set ai et ts=4 sts=4 sw=4:
 #![allow(unused)]
 use crate::dprint::*;
+use num;
 use std::str;
 use std::fs::File;
 use std::cmp::{min,max,PartialEq,Ordering};
+use std::ops::Rem;
 use std::io::{BufReader, BufRead};
 use std::vec::Vec;
 use std::fmt::{Debug, Display};
@@ -22,11 +24,18 @@ pub fn file_read_i64s(filename: &str) -> Vec<i64> {
 pub fn manhattan_distance(p1: (i32,i32), p2: (i32,i32)) -> u32 {
     ((p2.0 - p1.0).abs() + (p2.1 - p1.1).abs()) as u32
 }
-pub fn gcd(a: i32, b: i32) -> i32 {
-    match b {
-        0 => a,
-        _ => gcd(b, a % b),
-    }
+pub fn mod_mult_inverse<T>(a: T, n: T) -> T
+    where T: num::Integer + Clone + Debug
+{
+    // computes a^(-1) mod n, i.e. x such that a*x = 1 (mod n)
+    let gcd_ex = a.extended_gcd(&n);
+    assert_eq!(gcd_ex.gcd, T::one()); // otherwise the modular multiplicative inverse does not exist
+    gcd_ex.x
+}
+pub fn gcd<T>(a: T, b: T) -> T
+    where T: num::Integer
+{
+    a.gcd(&b)
 }
 pub fn rad2deg(rad: f64) -> f64 {
     rad*180f64/PI
