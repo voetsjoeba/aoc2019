@@ -173,6 +173,15 @@ impl CPU
             relative_base: 0,
         }
     }
+    pub fn reset(&mut self, program: &Vec<i64>) -> &mut Self {
+        self.pc = 0usize;
+        self.mem = Memory::new(program.clone());
+        self.input_queue.clear();
+        self.output_queue.clear();
+        self.state = CpuState::Halted;
+        self.relative_base = 0;
+        self
+    }
     pub fn run(&mut self) -> &mut Self {
         // starts (or restarts) the CPU and runs as far as possible until halting or waiting for IO.
         self.state = CpuState::Running;
@@ -283,6 +292,9 @@ impl CPU
         // for external access to writing memory
         self.mem[addr as usize] = value;
         self
+    }
+    pub fn read_mem(&mut self, addr: i64) -> i64 {
+        self.mem[addr as usize]
     }
     pub fn send_input(&mut self, input: i64) -> &mut Self{
         self.input_queue.push_back(input);
