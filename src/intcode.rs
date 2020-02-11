@@ -419,4 +419,55 @@ mod tests {
         assert_eq!(cpu.get_state(), CpuState::Halted);
         assert_eq!(cpu.consume_output_all(), vec![17]);
     }
+
+    #[test]
+    fn negative_ints() {
+        let mut cpu = CPU::new(&vec![1101,100,-1,4,0]); // find 100 + -1, store the result in position 4
+        cpu.run();
+        assert!(cpu.is_halted());
+        assert_eq!(cpu.read_mem(4), 99);
+    }
+
+    #[test]
+    fn cmps_and_addressing_modes() {
+        // Using position mode, consider whether the input is equal to 8;
+        // output 1 (if it is) or 0 (if it is not).
+        let input_eq_8_position_mode  = vec![3,9,8,9,10,9,4,9,99,-1,8];
+        let input_lt_8_position_mode  = vec![3,9,7,9,10,9,4,9,99,-1,8]; // analogously
+        let input_eq_8_immediate_mode = vec![3,3,1108,-1,8,3,4,3,99];
+        let input_lt_8_immediate_mode = vec![3,3,1107,-1,8,3,4,3,99];
+
+        let mut cpu = CPU::new(&vec![]);
+        assert_eq!(cpu.reset(&input_eq_8_position_mode).send_input(8).run().consume_output_all(), vec![1]);
+        assert_eq!(cpu.reset(&input_eq_8_position_mode).send_input(7).run().consume_output_all(), vec![0]);
+        assert_eq!(cpu.reset(&input_eq_8_immediate_mode).send_input(8).run().consume_output_all(), vec![1]);
+        assert_eq!(cpu.reset(&input_eq_8_immediate_mode).send_input(7).run().consume_output_all(), vec![0]);
+
+        assert_eq!(cpu.reset(&input_lt_8_position_mode).send_input(7).run().consume_output_all(), vec![1]);
+        assert_eq!(cpu.reset(&input_lt_8_position_mode).send_input(8).run().consume_output_all(), vec![0]);
+        assert_eq!(cpu.reset(&input_lt_8_immediate_mode).send_input(7).run().consume_output_all(), vec![1]);
+        assert_eq!(cpu.reset(&input_lt_8_immediate_mode).send_input(8).run().consume_output_all(), vec![0]);
+
+        let input_eq_0_position_mode  = vec![3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9];
+        let input_eq_0_immediate_mode = vec![3,3,1105,-1,9,1101,0,0,12,4,12,99,1];
+
+        assert_eq!(cpu.reset(&input_eq_0_position_mode).send_input(0).run().consume_output_all(),  vec![0]);
+        assert_eq!(cpu.reset(&input_eq_0_position_mode).send_input(7).run().consume_output_all(),  vec![1]);
+        assert_eq!(cpu.reset(&input_eq_0_position_mode).send_input(-7).run().consume_output_all(), vec![1]);
+        assert_eq!(cpu.reset(&input_eq_0_immediate_mode).send_input(0).run().consume_output_all(),  vec![0]);
+        assert_eq!(cpu.reset(&input_eq_0_immediate_mode).send_input(7).run().consume_output_all(),  vec![1]);
+        assert_eq!(cpu.reset(&input_eq_0_immediate_mode).send_input(-7).run().consume_output_all(), vec![1]);
+
+        // ".. uses an input instruction to ask for a single number. The program will then output 999 if
+        // the input value is below 8, output 1000 if the input value is equal to 8, or output 1001
+        // if the input value is greater than 8.
+        let cmp_input_to_8 = vec![3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,
+                                  1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,
+                                  999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99];
+
+        assert_eq!(cpu.reset(&cmp_input_to_8).send_input(-7).run().consume_output_all(), vec![999]);
+        assert_eq!(cpu.reset(&cmp_input_to_8).send_input(8).run().consume_output_all(), vec![1000]);
+        assert_eq!(cpu.reset(&cmp_input_to_8).send_input(18).run().consume_output_all(), vec![1001]);
+
+    }
 }
